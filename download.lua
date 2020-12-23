@@ -10,7 +10,6 @@ local applications = {
   {"https://raw.githubusercontent.com/serafim77/Info-Panel-ECS-Fork/master/Pages/Main.txt", "Pages/Main.txt"},
   {"https://raw.githubusercontent.com/serafim77/Info-Panel-ECS-Fork/master/Pages/Rules.txt", "Pages/Rules.txt"},
   {"https://raw.githubusercontent.com/serafim77/Info-Panel-ECS-Fork/master/Pages/SSPI.txt"} "Pages/SSPI.txt"}
-}
 
 for i = 1, #applications do
   print("Скачиваю " .. applications[i][2])

@@ -177,7 +177,7 @@ end
 ------------------------------------------------------------------------------------------------------------------
 
 local config = {
-  scale = 1, --0.63,
+  scale = 0.63,
   leftBarWidth = 20,
   scrollSpeed = 6,
   pathToInfoPanelFolder = fs.path(getCurrentScript()) .. "Pages/",

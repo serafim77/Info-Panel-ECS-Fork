@@ -9,7 +9,7 @@ image.save("1.pic",img)
 
 --отрисовываем созданую картинку
 local picture = image.load("1.pic")
-image.draw(2, 2, picture)
+image.draw(1, 2, picture)
 
 gpu.setBackground(0x000000)
 gpu.setForeground(0xFFFFFF)

@@ -57,37 +57,62 @@ encodingMethods.load[5] = function(file, picture)
 	end
 end
 
+------------------------------------------------------------------------------------------------------------
+
+function table_size(t)
+	local size = 0
+	for key in pairs(t) do size = size + 1 end
+	return size
+end
+
+-- Split nubmer to it's own bytes with specified count of bytes (0xAABB, 5 -> {0x00, 0x00, 0x00, 0xAA, 0xBB})
+function bit32_numberToFixedSizeByteArray(number, size)
+	local byteArray, counter = {}, 0
+	
+	repeat
+		table.insert(byteArray, 1, bit32.band(number, 0xFF))
+		number = bit32.rshift(number, 8)
+		counter = counter + 1
+	until number <= 0
+
+	for i = 1, size - counter do
+		table.insert(byteArray, 1, 0x0)
+	end
+
+	return byteArray
+end
+
 ---------------------------------------- Grouped and compressed OCIF6 encoding ----------------------------------------
 
 encodingMethods.save[6] = function(file, picture)
 	-- Grouping picture by it's alphas, symbols and colors
 	local groupedPicture = image.group(picture, true)
 	-- Writing 1 byte for alphas array size
-	file:write(string.char(table.size(groupedPicture)))
+	file:write(string.char(table_size(groupedPicture)))
 
 	for alpha in pairs(groupedPicture) do
 		-- Writing 1 byte for current alpha value
 		file:write(string.char(math.floor(alpha * 255)))
 		-- Writing 2 bytes for symbols array size
-		writeByteArrayToFile(file, bit32.numberToFixedSizeByteArray(table.size(groupedPicture[alpha]), 2))
+		writeByteArrayToFile(file, bit32_numberToFixedSizeByteArray(table_size(groupedPicture[alpha]), 2))
 
 		for symbol in pairs(groupedPicture[alpha]) do
 			-- Writing N bytes for current unicode symbol value
 			writeByteArrayToFile(file, { string.byte(symbol, 1, 6) })
 			-- Writing 1 byte for backgrounds array size
-			file:write(string.char(table.size(groupedPicture[alpha][symbol])))
+			file:write(string.char(table_size(groupedPicture[alpha][symbol])))
 
 			for background in pairs(groupedPicture[alpha][symbol]) do
 				-- Writing 1 byte for background color value (compressed by color)
 				file:write(string.char(background))
 				-- Writing 1 byte for foregrounds array size
-				file:write(string.char(table.size(groupedPicture[alpha][symbol][background])))
+				file:write(string.char(table_size(groupedPicture[alpha][symbol][background])))
 
 				for foreground in pairs(groupedPicture[alpha][symbol][background]) do
 					-- Writing 1 byte for foreground color value (compressed by color)
 					file:write(string.char(foreground))
 					-- Writing 1 byte for y array size
-					file:write(string.char(table.size(groupedPicture[alpha][symbol][background][foreground])))
+					file:write(string.char(table_size(groupedPicture[alpha][symbol][background][foreground])))
 					
 					for y in pairs(groupedPicture[alpha][symbol][background][foreground]) do
 						-- Writing 1 byte for current y value
@@ -195,5 +220,3 @@ end
 ------------------------------------------------------------------------------------------------------------
 
 return module
-
-

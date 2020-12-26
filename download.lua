@@ -6,7 +6,8 @@ local applications = {
   {"serafim77/Info-Panel-ECS-Fork/master/Pages/Claims.txt", "Pages/Claims.txt"},
   {"serafim77/Info-Panel-ECS-Fork/master/Pages/Main.txt", "Pages/Main.txt"},
   {"serafim77/Info-Panel-ECS-Fork/master/Pages/Rules.txt", "Pages/Rules.txt"},
-  {"serafim77/Info-Panel-ECS-Fork/master/Pages/SSPI.txt", "Pages/SSPI.txt"}
+  {"serafim77/Info-Panel-ECS-Fork/master/Pages/SSPI.txt", "Pages/SSPI.txt"},
+  {"serafim77/Info-Panel-ECS-Fork/master/test_image.lua", "test_image.lua"}
 }
 
 os.execute("md Pages")

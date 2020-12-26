@@ -258,7 +258,9 @@ local function drawMain()
             local bg, fg = gpu.getBackground(), gpu.getForeground()
             local picture = image.load(stroki[line][i][1])
             image.draw(xPos, yPos, picture)
-            yPos = yPos + picture.height - 1
+            if picture.height then
+              yPos = yPos + picture.height - 1
+            end
             gpu.setForeground(fg)
             gpu.setBackground(bg)
           end

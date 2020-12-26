@@ -13,208 +13,223 @@ local color = require("color")
 local module = {}
 local OCIFSignature = "OCIF"
 local encodingMethods = {
-	load = {},
-	save = {}
+  load = {},
+  save = {}
 }
 
-------------------------------------------------------------------------------------------------------------
+---------------------------------------- Advanced Lua Library v1.1 by ECS ----------------------------------
+
+local function table_size(t)
+  local size = 0
+  for key in pairs(t) do size = size + 1 end
+  return size
+end
+
+local function bit32_numberToFixedSizeByteArray(number, size)
+  local byteArray, counter = {}, 0
+  repeat
+    table.insert(byteArray, 1, bit32.band(number, 0xFF))
+    number = bit32.rshift(number, 8)
+    counter = counter + 1
+  until number <= 0
+  for i = 1, size - counter do
+    table.insert(byteArray, 1, 0x0)
+  end
+  return byteArray
+end
 
 local function writeByteArrayToFile(file, byteArray)
-	for i = 1, #byteArray do
-		file:write(string.char(byteArray[i]))
-	end
+  for i = 1, #byteArray do
+    file:write(string.char(byteArray[i]))
+  end
+end
+
+function bit32_byteArrayToNumber(byteArray)
+  local result = byteArray[1]
+  for i = 2, #byteArray do
+    result = bit32.bor(bit32.lshift(result, 8), byteArray[i])
+  end
+  return result
 end
 
 local function readNumberFromFile(file, countOfBytes)
-	local byteArray = {}
-	for i = 1, countOfBytes do
-		table.insert(byteArray, string.byte(file:read(1)))
-	end
+  local byteArray = {}
+  for i = 1, countOfBytes do
+    table.insert(byteArray, string.byte(file:read(1)))
+  end
+  return bit32_byteArrayToNumber(byteArray)
+end
 
-	return bit32.byteArrayToNumber(byteArray)
+function string_readUnicodeChar(file)
+  local byteArray = {string.byte(file:read(1))}
+  local nullBitPosition = 0
+  for i = 1, 7 do
+    if bit32.band(bit32.rshift(byteArray[1], 8 - i), 0x1) == 0x0 then
+      nullBitPosition = i
+      break
+    end
+  end
+  for i = 1, nullBitPosition - 2 do
+    table.insert(byteArray, string.byte(file:read(1)))
+  end
+  return string.char(table.unpack(byteArray))
 end
 
 ---------------------------------------- Uncompressed OCIF1 encoding ----------------------------------------
 
 encodingMethods.save[5] = function(file, picture)
-	for i = 3, #picture, 4 do
-		file:write(string.char(color.to8Bit(picture[i])))
-		file:write(string.char(color.to8Bit(picture[i + 1])))
-		file:write(string.char(math.floor(picture[i + 2] * 255)))
-		writeByteArrayToFile(file, {string.byte(picture[i + 3], 1, 6)})
-	end
+  for i = 3, #picture, 4 do
+    file:write(string.char(color.to8Bit(picture[i])))
+    file:write(string.char(color.to8Bit(picture[i + 1])))
+    file:write(string.char(math.floor(picture[i + 2] * 255)))
+    writeByteArrayToFile(file, {string.byte(picture[i + 3], 1, 6)})
+  end
 end
 
 encodingMethods.load[5] = function(file, picture)
-	table.insert(picture, readNumberFromFile(file, 2))
-	table.insert(picture, readNumberFromFile(file, 2))
-
-	for i = 1, image.getWidth(picture) * image.getHeight(picture) do
-		table.insert(picture, color.to24Bit(string.byte(file:read(1))))
-		table.insert(picture, color.to24Bit(string.byte(file:read(1))))
-		table.insert(picture, string.byte(file:read(1)) / 255)
-		table.insert(picture, string.readUnicodeChar(file))
-	end
-end
-
-------------------------------------------------------------------------------------------------------------
-
-function table_size(t)
-	local size = 0
-	for key in pairs(t) do size = size + 1 end
-	return size
-end
-
--- Split nubmer to it's own bytes with specified count of bytes (0xAABB, 5 -> {0x00, 0x00, 0x00, 0xAA, 0xBB})
-function bit32_numberToFixedSizeByteArray(number, size)
-	local byteArray, counter = {}, 0
-	
-	repeat
-		table.insert(byteArray, 1, bit32.band(number, 0xFF))
-		number = bit32.rshift(number, 8)
-		counter = counter + 1
-	until number <= 0
-
-	for i = 1, size - counter do
-		table.insert(byteArray, 1, 0x0)
-	end
-
-	return byteArray
+  table.insert(picture, readNumberFromFile(file, 2))
+  table.insert(picture, readNumberFromFile(file, 2))
+  for i = 1, image.getWidth(picture) * image.getHeight(picture) do
+    table.insert(picture, color.to24Bit(string.byte(file:read(1))))
+    table.insert(picture, color.to24Bit(string.byte(file:read(1))))
+    table.insert(picture, string.byte(file:read(1)) / 255)
+    table.insert(picture, string_readUnicodeChar(file))
+  end
 end
 
 ---------------------------------------- Grouped and compressed OCIF6 encoding ----------------------------------------
 
 encodingMethods.save[6] = function(file, picture)
-	-- Grouping picture by it's alphas, symbols and colors
-	local groupedPicture = image.group(picture, true)
-	-- Writing 1 byte for alphas array size
-	file:write(string.char(table_size(groupedPicture)))
+  -- Grouping picture by it's alphas, symbols and colors
+  local groupedPicture = image.group(picture, true)
+  -- Writing 1 byte for alphas array size
+  file:write(string.char(table_size(groupedPicture)))
 
-	for alpha in pairs(groupedPicture) do
-		-- Writing 1 byte for current alpha value
-		file:write(string.char(math.floor(alpha * 255)))
-		-- Writing 2 bytes for symbols array size
-		writeByteArrayToFile(file, bit32_numberToFixedSizeByteArray(table_size(groupedPicture[alpha]), 2))
+  for alpha in pairs(groupedPicture) do
+    -- Writing 1 byte for current alpha value
+    file:write(string.char(math.floor(alpha * 255)))
+    -- Writing 2 bytes for symbols array size
+    writeByteArrayToFile(file, bit32_numberToFixedSizeByteArray(table_size(groupedPicture[alpha]), 2))
 
-		for symbol in pairs(groupedPicture[alpha]) do
-			-- Writing N bytes for current unicode symbol value
-			writeByteArrayToFile(file, { string.byte(symbol, 1, 6) })
-			-- Writing 1 byte for backgrounds array size
-			file:write(string.char(table_size(groupedPicture[alpha][symbol])))
+    for symbol in pairs(groupedPicture[alpha]) do
+      -- Writing N bytes for current unicode symbol value
+      writeByteArrayToFile(file, { string.byte(symbol, 1, 6) })
+      -- Writing 1 byte for backgrounds array size
+      file:write(string.char(table_size(groupedPicture[alpha][symbol])))
 
-			for background in pairs(groupedPicture[alpha][symbol]) do
-				-- Writing 1 byte for background color value (compressed by color)
-				file:write(string.char(background))
-				-- Writing 1 byte for foregrounds array size
-				file:write(string.char(table_size(groupedPicture[alpha][symbol][background])))
+      for background in pairs(groupedPicture[alpha][symbol]) do
+        -- Writing 1 byte for background color value (compressed by color)
+        file:write(string.char(background))
+        -- Writing 1 byte for foregrounds array size
+        file:write(string.char(table_size(groupedPicture[alpha][symbol][background])))
 
-				for foreground in pairs(groupedPicture[alpha][symbol][background]) do
-					-- Writing 1 byte for foreground color value (compressed by color)
-					file:write(string.char(foreground))
-					-- Writing 1 byte for y array size
-					file:write(string.char(table_size(groupedPicture[alpha][symbol][background][foreground])))
-					
-					for y in pairs(groupedPicture[alpha][symbol][background][foreground]) do
-						-- Writing 1 byte for current y value
-						file:write(string.char(y))
-						-- Writing 1 byte for x array size
-						file:write(string.char(#groupedPicture[alpha][symbol][background][foreground][y]))
+        for foreground in pairs(groupedPicture[alpha][symbol][background]) do
+          -- Writing 1 byte for foreground color value (compressed by color)
+          file:write(string.char(foreground))
+          -- Writing 1 byte for y array size
+          file:write(string.char(table_size(groupedPicture[alpha][symbol][background][foreground])))
+          
+          for y in pairs(groupedPicture[alpha][symbol][background][foreground]) do
+            -- Writing 1 byte for current y value
+            file:write(string.char(y))
+            -- Writing 1 byte for x array size
+            file:write(string.char(#groupedPicture[alpha][symbol][background][foreground][y]))
 
-						for x = 1, #groupedPicture[alpha][symbol][background][foreground][y] do
-							file:write(string.char(groupedPicture[alpha][symbol][background][foreground][y][x]))
-						end
-					end
-				end
-			end
-		end
-	end
+            for x = 1, #groupedPicture[alpha][symbol][background][foreground][y] do
+              file:write(string.char(groupedPicture[alpha][symbol][background][foreground][y][x]))
+            end
+          end
+        end
+      end
+    end
+  end
 end
 
 encodingMethods.load[6] = function(file, picture)
-	table.insert(picture, string.byte(file:read(1)))
-	table.insert(picture, string.byte(file:read(1)))
+  table.insert(picture, string.byte(file:read(1)))
+  table.insert(picture, string.byte(file:read(1)))
 
-	local currentAlpha, currentSymbol, currentBackground, currentForeground, currentY, currentX
-	local alphaSize, symbolSize, backgroundSize, foregroundSize, ySize, xSize
+  local currentAlpha, currentSymbol, currentBackground, currentForeground, currentY, currentX
+  local alphaSize, symbolSize, backgroundSize, foregroundSize, ySize, xSize
 
-	alphaSize = string.byte(file:read(1))
-	
-	for alpha = 1, alphaSize do
-		currentAlpha = string.byte(file:read(1)) / 255
-		symbolSize = readNumberFromFile(file, 2)
-		
-		for symbol = 1, symbolSize do
-			currentSymbol = string.readUnicodeChar(file)
-			backgroundSize = string.byte(file:read(1))
-			
-			for background = 1, backgroundSize do
-				currentBackground = color.to24Bit(string.byte(file:read(1)))
-				foregroundSize = string.byte(file:read(1))
-				
-				for foreground = 1, foregroundSize do
-					currentForeground = color.to24Bit(string.byte(file:read(1)))
-					ySize = string.byte(file:read(1))
-					
-					for y = 1, ySize do
-						currentY = string.byte(file:read(1))
-						xSize = string.byte(file:read(1))
-						
-						for x = 1, xSize do
-							currentX = string.byte(file:read(1))
-							image.set(picture, currentX, currentY, currentBackground, currentForeground, currentAlpha, currentSymbol)
-						end
-					end
-				end
-			end
-		end
-	end
+  alphaSize = string.byte(file:read(1))
+  
+  for alpha = 1, alphaSize do
+    currentAlpha = string.byte(file:read(1)) / 255
+    symbolSize = readNumberFromFile(file, 2)
+    
+    for symbol = 1, symbolSize do
+      currentSymbol = string_readUnicodeChar(file)
+      backgroundSize = string.byte(file:read(1))
+      
+      for background = 1, backgroundSize do
+        currentBackground = color.to24Bit(string.byte(file:read(1)))
+        foregroundSize = string.byte(file:read(1))
+        
+        for foreground = 1, foregroundSize do
+          currentForeground = color.to24Bit(string.byte(file:read(1)))
+          ySize = string.byte(file:read(1))
+          
+          for y = 1, ySize do
+            currentY = string.byte(file:read(1))
+            xSize = string.byte(file:read(1))
+            
+            for x = 1, xSize do
+              currentX = string.byte(file:read(1))
+              image.set(picture, currentX, currentY, currentBackground, currentForeground, currentAlpha, currentSymbol)
+            end
+          end
+        end
+      end
+    end
+  end
 end
 
 ---------------------------------------- Public load&save methods of module ----------------------------------------
 
 function module.load(path)
-	local file, reason = io.open(path, "rb")
-	if file then
-		local readedSignature = file:read(#OCIFSignature)
-		if readedSignature == OCIFSignature then
-			local encodingMethod = string.byte(file:read(1))
-			if encodingMethods.load[encodingMethod] then
-				local picture = {}
-				encodingMethods.load[encodingMethod](file, picture)
-				file:close()	
-				
-				return picture
-			else
-				file:close()
-				error("Failed to load OCIF image: encoding method \"" .. tostring(encodingMethod) .. "\" is not supported")
-			end
-		else
-			file:close()
-			error("Failed to load OCIF image: wrong signature (\"" .. tostring(readedSignature) .. "\")")
-		end
-	else
-		error("Failed to open file \"" .. tostring(path) .. "\" for reading: " .. tostring(reason))
-	end
+  local file, reason = io.open(path, "rb")
+  if file then
+    local readedSignature = file:read(#OCIFSignature)
+    if readedSignature == OCIFSignature then
+      local encodingMethod = string.byte(file:read(1))
+      if encodingMethods.load[encodingMethod] then
+        local picture = {}
+        encodingMethods.load[encodingMethod](file, picture)
+        file:close()  
+        
+        return picture
+      else
+        file:close()
+        error("Failed to load OCIF image: encoding method \"" .. tostring(encodingMethod) .. "\" is not supported")
+      end
+    else
+      file:close()
+      error("Failed to load OCIF image: wrong signature (\"" .. tostring(readedSignature) .. "\")")
+    end
+  else
+    error("Failed to open file \"" .. tostring(path) .. "\" for reading: " .. tostring(reason))
+  end
 end
 
 function module.save(path, picture, encodingMethod)
-	encodingMethod = encodingMethod or 6
-	
-	local file, reason = io.open(path, "wb")
-	if file then	
-		if encodingMethods.save[encodingMethod] then
-			-- Writing signature, encoding method, image width and height
-			file:write(OCIFSignature, string.char(encodingMethod), string.char(picture[1]), string.char(picture[2]))
-			-- Executing selected encoding method
-			encodingMethods.save[encodingMethod](file, picture)
-			file:close()
-		else
-			file:close()
-			error("Failed to save file as OCIF image: encoding method \"" .. tostring(encodingMethod) .. "\" is not supported")
-		end
-	else
-		error("Failed to open file for writing: " .. tostring(reason))
-	end
+  encodingMethod = encodingMethod or 6
+  
+  local file, reason = io.open(path, "wb")
+  if file then  
+    if encodingMethods.save[encodingMethod] then
+      -- Writing signature, encoding method, image width and height
+      file:write(OCIFSignature, string.char(encodingMethod), string.char(picture[1]), string.char(picture[2]))
+      -- Executing selected encoding method
+      encodingMethods.save[encodingMethod](file, picture)
+      file:close()
+    else
+      file:close()
+      error("Failed to save file as OCIF image: encoding method \"" .. tostring(encodingMethod) .. "\" is not supported")
+    end
+  else
+    error("Failed to open file for writing: " .. tostring(reason))
+  end
 end
 
 ------------------------------------------------------------------------------------------------------------
